@@ -1,0 +1,12 @@
+#!/usr/bin/env perl
+
+use common::sense;
+use Rhetoric;
+
+say "storage";
+my $blog = Rhetoric::storage('File');
+$blog->install;
+say "rh import-themes";
+system("rh import-themes");
+say "rh psgi";
+system("rh psgi > rhetoric.psgi");
