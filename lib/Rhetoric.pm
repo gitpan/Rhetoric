@@ -8,7 +8,7 @@ use Rhetoric::Helpers ':all';
 use Rhetoric::Widgets;
 use Rhetoric::Meta;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 # global config for our blogging app
 our %CONFIG = (
@@ -20,7 +20,9 @@ our %CONFIG = (
 
   'theme'               => 'BrownStone',          # Rhetoric::Theme::____
   'theme.base'          => './share/theme',
-  'continuity_docroot'  => 'share',
+
+  'login'               => 'admin',
+  'password'            => 'admin',
 
   'storage'             => 'File',                # Rhetoric::Storage::____
   'storage.file.path'   => '.',
@@ -55,7 +57,6 @@ sub service {
   H->bless($v);
   H->bless($c->input);
   H->bless($c->env);
-  H->bless($c->state);
   $v->{title}        = $s->meta('title');
   $v->{subtitle}     = $s->meta('subtitle');
   $v->{copy}         = $s->meta('copy');
@@ -63,6 +64,22 @@ sub service {
   $v->{request_path} = $c->env->{REQUEST_PATH};
   $v->{time_format}  = $CONFIG{time_format};
   $v->{state}        = $c->state; # XXX - Should Squatting be doing this automatically?
+
+  # hack to help rh-export
+  if ($c->state->{mock_request}) {
+    # the RIGHT THING(tm) would be to change how we store menu information.
+    # I suppose I need to support perl expressions in there instead of
+    # just strings.
+    # FIXME
+    for my $menu (@{$v->{menu}}) {
+      my $href = $menu->url;
+      if (($href !~ qr{^https?:}) && ($href !~ qr{\.html$}) && ($href ne '/')) {
+        $href .= ".html";
+        $menu->url($href);
+      }
+    }
+  }
+
   if (exists $CONFIG{relocated}) {
     for (@{ $v->menu }) {
       $_->url($CONFIG{relocated} . $_->url);
@@ -127,8 +144,24 @@ use aliased 'Squatting::H';
 use Method::Signatures::Simple;
 use Rhetoric::Helpers ':all';
 use Data::Dump 'pp';
+use MIME::Base64;
 use Ouch;
 use Try::Tiny;
+
+sub authorized {
+  my $self = shift;
+  return undef unless defined $self->env->{HTTP_AUTHORIZATION};
+  my $auth = $self->env->{HTTP_AUTHORIZATION};
+  $auth =~ s/Basic\s*//;
+  warn $auth;
+  my $login_pass =  encode_base64("$CONFIG{login}:$CONFIG{password}", '');
+  warn $login_pass;
+  if ($auth eq $login_pass) {
+    return 1;
+  } else {
+    return 0;
+  }
+}
 
 our @C = (
 
@@ -161,28 +194,38 @@ our @C = (
   ),
 
   # XXX - replace with Rhetoric::Admin->squat('/admin')
-  # Need to be able to create posts from a form too, right?!
   C(
-    NewPost => [ '/post' ],
+    NewPost => [ '/admin' ],
     get => method {
-      $self->render('new_post');
+      if (authorized($self)) {
+        $self->render('new_post');
+      } else {
+        $self->status = 401;
+        $self->headers->{'WWW-Authenticate'} = 'Basic realm="Secret"';
+        "auth yourself";
+      }
     },
     post => method {
-      my $storage = $self->env->storage;
-      my $input   = $self->input;
-      try {
-        $storage->new_post({
-          title => $input->title,
-          body  => $input->body,
-        });
-      }
-      catch {
-        if    (kiss('MissingTitle', $_)) {
+      if (authorized($self)) {
+        my $storage = $self->env->storage;
+        my $input   = $self->input;
+        try {
+          $storage->new_post({
+            title  => $input->title,
+            body   => $input->body,
+            format => $input->format,
+          });
         }
-        elsif (kiss('MissingBody',  $_)) {
-        }
-        else  {
-        }
+        catch {
+          if (kiss('InvalidPost', $_)) {
+            $self->state->{errors} = $_->data;
+          }
+          else {
+          }
+        };
+        $self->redirect(R('NewPost'));
+      } else {
+        $self->redirect(R('Home'));
       }
     },
   ),
