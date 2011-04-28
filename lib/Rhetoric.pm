@@ -8,7 +8,7 @@ use Rhetoric::Helpers ':all';
 use Rhetoric::Widgets;
 use Rhetoric::Meta;
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 # global config for our blogging app
 our %CONFIG = (
@@ -241,6 +241,7 @@ our @C = (
       my $email   = $input->email;
       my $url     = $input->url;
       my $body    = $input->body;
+      my $format  = $input->format // 'pod';
       my $storage = $self->env->storage;
       my $state   = $self->state;
       warn pp $state;
@@ -252,10 +253,11 @@ our @C = (
       my $result;
       try {
         $result = $storage->new_comment($year, $month, $slug, {
-          name  => $name,
-          email => $email,
-          url   => $url,
-          body  => $body
+          name   => $name,
+          email  => $email,
+          url    => $url,
+          body   => $body,
+          format => $format,
         });
       }
       catch {
