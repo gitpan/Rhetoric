@@ -32,10 +32,14 @@ requires:
   Pod::Simple: 0
   Squatting: 0.81
   Squatting::On::PSGI: 0.05
+  Template: 0
+  Text::Markdown: 0
+  Text::Textile: 0
   Try::Tiny: 0
   XML::Atom: 0
   aliased: 0
   common::sense: 0
+  perl: 5.10.0
 resources:
   license: http://opensource.org/licenses/mit-license.php
-version: 0.03
+version: 0.04

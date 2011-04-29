@@ -1,4 +1,5 @@
 package Rhetoric;
+use 5.010_0;
 use common::sense;
 use aliased 'Squatting::H';
 use Squatting;
@@ -8,7 +9,7 @@ use Rhetoric::Helpers ':all';
 use Rhetoric::Widgets;
 use Rhetoric::Meta;
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 # global config for our blogging app
 our %CONFIG = (
@@ -37,8 +38,6 @@ our %CONFIG = (
   docroot => 'share',
 );
 
-# TODO - divorce Continuity
-# TODO - marry   Plack
 sub continue {
   my $app = shift;
   $app->next::method(
@@ -339,6 +338,8 @@ use Module::Find;
 
 *CONFIG = \%Rhetoric::CONFIG;
 
+# Someday, there may be too many themes for this to be practical.
+# That would be a good problem to have.
 our @themes = usesub 'Rhetoric::Theme';
 
 our @V = (
