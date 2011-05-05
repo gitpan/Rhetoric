@@ -9,7 +9,7 @@ use Rhetoric::Helpers ':all';
 use Rhetoric::Widgets;
 use Rhetoric::Meta;
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 # global config for our blogging app
 our %CONFIG = (
@@ -62,6 +62,7 @@ sub service {
   $v->{menu}         = $s->menu;
   $v->{request_path} = $c->env->{REQUEST_PATH};
   $v->{time_format}  = $CONFIG{time_format};
+  $v->{hostname}     = $CONFIG{hostname} // $c->env->{HTTP_HOST};
   $v->{state}        = $c->state; # XXX - Should Squatting be doing this automatically?
 
   # hack to help rh-export
@@ -91,6 +92,7 @@ sub service {
   $class->next::method($c, @args);
 }
 
+# initialize app
 sub init {
   my ($class) = @_;
 
@@ -172,6 +174,16 @@ our @C = (
       $page //= 1;
       ($v->{posts}, $v->{pager}) = $storage->posts($CONFIG{posts_per_page}, $page);
       $self->render('index');
+    },
+  ),
+
+  C(
+    Feed => [ '/feed' ],
+    get => method {
+      my $v = $self->v;
+      my $storage = $self->env->storage;
+      ($v->{posts}, $v->{pager}) = $storage->posts($CONFIG{posts_per_page}, 1);
+      $self->render('index', 'AtomFeed');
     },
   ),
 
@@ -338,9 +350,9 @@ use Module::Find;
 
 *CONFIG = \%Rhetoric::CONFIG;
 
-# Someday, there may be too many themes for this to be practical.
+# Someday, there may be too many themes for the call to usesub to be practical.
 # That would be a good problem to have.
-our @themes = usesub 'Rhetoric::Theme';
+our @themes = usesub('Rhetoric::Theme');
 
 our @V = (
 
@@ -348,10 +360,45 @@ our @V = (
 
   V(
     'AtomFeed',
-    feed => method($v) {
-      my $feed = XML::Atom::Feed->new;
+
+    _atom_id => method($post) {
+      my $hostname = $CONFIG{hostname};
+      sprintf('tag:%s,%d-%02d-%02d:%s',
+        $hostname,
+        $post->year, $post->month, $post->day,
+        R('Post', $post->year, $post->month, $post->slug)
+      );
+    },
+
+    _link => method($post) {
+      my $link     = XML::Atom::Link->new();
+      my $hostname = $CONFIG{hostname};
+      $link->type('text/html');
+      $link->rel('alternate');
+      $link->href(sprintf(
+        'http://%s%s',
+        $hostname,
+        R('Post', $post->year, $post->month, $post->slug)
+      ));
+      $link;
+    },
+
+    index => method($v) {
+      my $feed     = XML::Atom::Feed->new();
+      my $hostname = $CONFIG{hostname};
+      my $since    = $CONFIG{since};
+      $feed->id(sprintf('tag:%s,%d:feed-id', $hostname, $since));
+      for my $post (@{ $v->posts }) {
+        my $entry = XML::Atom::Entry->new();
+        $entry->id($self->_atom_id($post));
+        $entry->add_link($self->_link($post));
+        $entry->title($post->title);
+        $entry->content($post->body);
+        $feed->add_entry($entry);
+      }
       $feed->as_xml;
     }
+
   ),
 
 );
